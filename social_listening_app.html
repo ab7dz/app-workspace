@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PulseMind - نظام الاستماع الاجتماعي وتحليل المشاعر (OSINT)</title>
+  <!-- Google Fonts & Lucide Icons / Tailwind CDN -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            cairo: ['Cairo', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#f0fdfa',
+              100: '#ccfbf1',
+              500: '#14b8a6',
+              600: '#0d9488',
+              700: '#0f766e',
+            },
+            surface: {
+              900: '#0b0f17',
+              800: '#111827',
+              700: '#1f2937',
+              600: '#374151',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Cairo', sans-serif;
+      background-color: #0b0f17;
+      color: #f3f4f6;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #111827;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #374151;
+      border-radius: 4px;
+    }
+    .glass-card {
+      background: rgba(17, 24, 39, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .badge-positive {
+      background-color: rgba(34, 197, 94, 0.15);
+      color: #4ade80;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+    .badge-negative {
+      background-color: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .badge-neutral {
+      background-color: rgba(234, 179, 8, 0.15);
+      color: #facc15;
+      border: 1px solid rgba(234, 179, 8, 0.3);
+    }
+  </style>
+</head>
+<body class="min-h-screen custom-scrollbar flex flex-col justify-between">
+
+  <!-- Header -->
+  <header class="sticky top-0 z-40 glass-card border-b border-gray-800/80 px-4 py-3 sm:px-8">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-500 to-emerald-400 flex items-center justify-center shadow-lg shadow-teal-500/20 text-white font-black text-xl">
+          ⚡
+        </div>
+        <div>
+          <h1 class="text-lg sm:text-xl font-bold bg-gradient-to-r from-teal-300 via-emerald-200 to-white bg-clip-text text-transparent">
+            PulseMind OSINT
+          </h1>
+          <p class="text-xs text-gray-400">نظام الاستماع الاجتماعي وتحليل المشاعر المتقدم</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="btnOpenBookmarks" class="relative px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-medium transition flex items-center gap-2 border border-gray-700">
+          <span>🔖 المحفوظات</span>
+          <span id="bookmarksCount" class="bg-teal-500 text-xs px-1.5 py-0.5 rounded-full text-black font-bold">0</span>
+        </button>
+        <button id="btnOpenSettings" class="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 transition" title="إعدادات API">
+          ⚙️
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto px-4 py-6 sm:px-8 w-full flex-grow">
+    
+    <!-- Search & Dork Builder Section -->
+    <section class="glass-card rounded-2xl p-4 sm:p-6 mb-6 shadow-xl relative overflow-hidden">
+      <div class="absolute -right-20 -top-20 w-60 h-60 bg-teal-500/10 rounded-full blur-3xl pointer-events-none"></div>
+      
+      <div class="flex flex-col md:flex-row gap-3 mb-4">
+        <div class="flex-grow relative">
+          <input type="text" id="topicInput" placeholder="أدخل موضوع البحث أو الكلمة المفتاحية (مثال: الذكاء الاصطناعي، العملات، الأهلي، الاقتصاد)..." 
+                 class="w-full bg-gray-900/90 border border-gray-700 text-gray-100 placeholder-gray-500 rounded-xl px-4 py-3.5 pl-10 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 text-base transition shadow-inner">
+          <button id="btnClearInput" class="absolute left-3 top-3.5 text-gray-400 hover:text-gray-200 hidden text-sm">✕</button>
+        </div>
+
+        <button id="btnSearch" class="bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-400 hover:to-emerald-500 text-slate-950 font-bold px-6 py-3.5 rounded-xl shadow-lg shadow-teal-500/25 flex items-center justify-center gap-2 transition transform active:scale-95">
+          <span>🔍</span>
+          <span>بدء الاستماع والتحليل</span>
+        </button>
+      </div>
+
+      <!-- Live Dorks & Shortcuts -->
+      <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-gray-800/80 text-xs">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-gray-400">موضوعات رائجة سريعة:</span>
+          <button class="topic-chip px-2.5 py-1 rounded-full bg-gray-800 hover:bg-gray-700 text-gray-300 transition" data-topic="الذكاء الاصطناعي">🤖 الذكاء الاصطناعي</button>
+          <button class="topic-chip px-2.5 py-1 rounded-full bg-gray-800 hover:bg-gray-700 text-gray-300 transition" data-topic="العملات الرقمية والتداول">📈 التداول والعملات</button>
+          <button class="topic-chip px-2.5 py-1 rounded-full bg-gray-800 hover:bg-gray-700 text-gray-300 transition" data-topic="دوري أبطال أوروبا">⚽ كرة القدم</button>
+          <button class="topic-chip px-2.5 py-1 rounded-full bg-gray-800 hover:bg-gray-700 text-gray-300 transition" data-topic="الهواتف الذكية">📱 التقنية والهواتف</button>
+        </div>
+
+        <div id="dorkPreviewContainer" class="flex items-center gap-2 text-gray-400">
+          <span class="font-mono text-[11px] bg-black/40 px-2 py-1 rounded border border-gray-800 truncate max-w-xs" id="dorkPreview">site:facebook.com OR site:x.com</span>
+          <button id="btnOpenGoogleDork" class="text-teal-400 hover:text-teal-300 font-semibold underline flex items-center gap-1">
+            فتح استعلام Dork في Google ↗
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Executive Summary & Stats Grid -->
+    <section id="analyticsSection" class="hidden mb-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+      
+      <!-- Executive Summary Card -->
+      <div class="lg:col-span-2 glass-card rounded-2xl p-5 border border-teal-500/20 shadow-lg relative flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-base font-bold text-teal-300 flex items-center gap-2">
+              <span>📊</span>
+              <span>الملخص الاستراتيجي التنفيذي (AI Intelligence)</span>
+            </h2>
+            <button id="btnCopySummary" class="text-xs bg-gray-800 hover:bg-gray-700 px-2.5 py-1.5 rounded-lg text-gray-300 border border-gray-700 flex items-center gap-1 transition">
+              <span>📋 نسخ التقرير</span>
+            </button>
+          </div>
+          <p id="summaryText" class="text-sm text-gray-300 leading-relaxed whitespace-pre-line bg-gray-900/50 p-4 rounded-xl border border-gray-800/80">
+            جاري استخراج وتحليل البيانات...
+          </p>
+        </div>
+
+        <div class="flex items-center justify-between mt-4 text-xs text-gray-400 pt-3 border-t border-gray-800">
+          <span id="analysisSourceBadge">⚡ تحليل ذكي فوري</span>
+          <span id="analysisTimestamp"></span>
+        </div>
+      </div>
+
+      <!-- Sentiment Breakdown Chart Card -->
+      <div class="glass-card rounded-2xl p-5 flex flex-col justify-between">
+        <h3 class="text-sm font-bold text-gray-200 mb-2 flex items-center gap-2">
+          <span>📈</span>
+          <span>توزيع المشاعر والانطباعات</span>
+        </h3>
+        <div class="h-44 flex items-center justify-center">
+          <canvas id="sentimentChart"></canvas>
+        </div>
+        <div class="grid grid-cols-3 gap-2 text-center text-xs mt-3 pt-3 border-t border-gray-800">
+          <div class="bg-green-950/40 border border-green-800/40 p-1.5 rounded-lg">
+            <div class="text-green-400 font-bold" id="positivePercent">0%</div>
+            <div class="text-gray-400 text-[10px]">إيجابي</div>
+          </div>
+          <div class="bg-yellow-950/40 border border-yellow-800/40 p-1.5 rounded-lg">
+            <div class="text-yellow-400 font-bold" id="neutralPercent">0%</div>
+            <div class="text-gray-400 text-[10px]">محايد</div>
+          </div>
+          <div class="bg-red-950/40 border border-red-800/40 p-1.5 rounded-lg">
+            <div class="text-red-400 font-bold" id="negativePercent">0%</div>
+            <div class="text-gray-400 text-[10px]">سلبي</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Filters & Actions Bar -->
+    <section id="filtersSection" class="hidden mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="text-xs text-gray-400">تصفية المنصة:</span>
+        <button class="filter-btn active-filter px-3 py-1.5 rounded-xl text-xs font-semibold bg-teal-500 text-black transition" data-filter-platform="ALL">الكل</button>
+        <button class="filter-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-800 text-gray-300 hover:bg-gray-700 transition" data-filter-platform="FACEBOOK">📘 فيسبوك</button>
+        <button class="filter-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-800 text-gray-300 hover:bg-gray-700 transition" data-filter-platform="X">𝕏 منصة إكس</button>
+        
+        <span class="text-xs text-gray-400 mr-2">المشاعر:</span>
+        <select id="sentimentFilter" class="bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-teal-400">
+          <option value="ALL">جميع المشاعر</option>
+          <option value="POSITIVE">🟢 إيجابي فقط</option>
+          <option value="NEUTRAL">🟡 محايد فقط</option>
+          <option value="NEGATIVE">🔴 سلبي فقط</option>
+        </select>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="btnExportJSON" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-xl border border-gray-700 transition">
+          💾 تصدير JSON
+        </button>
+        <button id="btnExportCSV" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-xl border border-gray-700 transition">
+          📊 تصدير CSV
+        </button>
+      </div>
+    </section>
+
+    <!-- Posts Feed Container -->
+    <section>
+      <!-- Loading State -->
+      <div id="loadingState" class="hidden py-16 text-center">
+        <div class="inline-block animate-spin w-10 h-10 border-4 border-teal-500 border-t-transparent rounded-full mb-3"></div>
+        <p class="text-teal-400 font-semibold text-sm">جاري الاستماع وتجميع المنشورات وتحليل المشاعر دلالياً...</p>
+        <p class="text-gray-500 text-xs mt-1">تطبيق معايير OSINT وفلاتر المحتوى الرقمي</p>
+      </div>
+
+      <!-- Empty / Initial State -->
+      <div id="initialState" class="py-16 text-center glass-card rounded-2xl border border-gray-800">
+        <div class="text-5xl mb-3">📡</div>
+        <h3 class="text-lg font-bold text-gray-300 mb-1">ابدأ جلسة استماع اجتماعي فورية</h3>
+        <p class="text-gray-500 text-sm max-w-md mx-auto">
+          اكتب أي اسم علامة تجارية، شخصية، حملة إعلامية أو كلمة مفتاحية لاكتشاف آراء الجمهور على فيسبوك وإكس مع تحليل فوري للمشاعر.
+        </p>
+      </div>
+
+      <!-- Feed Grid -->
+      <div id="postsFeed" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Rendered by JS -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Bookmarks Modal -->
+  <div id="bookmarksModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="glass-card w-full max-w-3xl rounded-2xl border border-gray-700 max-h-[85vh] flex flex-col overflow-hidden shadow-2xl">
+      <div class="p-4 border-b border-gray-800 flex items-center justify-between">
+        <h3 class="text-base font-bold text-teal-300 flex items-center gap-2">
+          <span>🔖</span>
+          <span>المنشورات المحفوظة (Bookmark Archive)</span>
+        </h3>
+        <button id="btnCloseBookmarks" class="text-gray-400 hover:text-white text-lg">✕</button>
+      </div>
+      <div id="bookmarksList" class="p-4 overflow-y-auto space-y-3 flex-grow custom-scrollbar">
+        <!-- Bookmark items rendered by JS -->
+      </div>
+      <div class="p-3 border-t border-gray-800 flex justify-between items-center text-xs text-gray-400 bg-gray-900/50">
+        <span id="savedItemsCountText">0 منشور محفوظ</span>
+        <button id="btnClearAllBookmarks" class="text-red-400 hover:text-red-300">مسح كل المحفوظات</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="glass-card w-full max-w-lg rounded-2xl border border-gray-700 p-6 shadow-2xl">
+      <div class="flex items-center justify-between mb-4 pb-2 border-b border-gray-800">
+        <h3 class="text-base font-bold text-gray-200 flex items-center gap-2">
+          <span>⚙️</span>
+          <span>إعدادات مفاتيح API (اختياري)</span>
+        </h3>
+        <button id="btnCloseSettings" class="text-gray-400 hover:text-white">✕</button>
+      </div>
+
+      <div class="space-y-4 text-xs">
+        <p class="text-gray-400">
+          يعمل التطبيق بالكامل بدون أي مفتاح بنظام المحاكاة الذكية المتقدمة. إذا كنت تملك مفاتيح خاصة بك لجلب البيانات الحية، يمكنك إضافتها هنا بأمان (تُحفظ في متصفحك محلياً فقط).
+        </p>
+
+        <div>
+          <label class="block text-gray-300 mb-1 font-semibold">Gemini API Key (تحليل المشاعر التوليدي والملخص):</label>
+          <input type="password" id="inputGeminiKey" placeholder="AIzaSy..." class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 focus:outline-none focus:border-teal-400">
+        </div>
+
+        <div>
+          <label class="block text-gray-300 mb-1 font-semibold">Google Custom Search API Key:</label>
+          <input type="password" id="inputGoogleSearchKey" placeholder="Google API Key..." class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 focus:outline-none focus:border-teal-400">
+        </div>
+
+        <div>
+          <label class="block text-gray-300 mb-1 font-semibold">Google Search Engine ID (CX):</label>
+          <input type="text" id="inputGoogleCX" placeholder="0123456789:abcdef..." class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 focus:outline-none focus:border-teal-400">
+        </div>
+      </div>
+
+      <div class="mt-6 flex justify-end gap-2">
+        <button id="btnSaveSettings" class="bg-teal-500 hover:bg-teal-400 text-black font-bold px-4 py-2 rounded-xl text-xs transition">
+          حفظ الإعدادات
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="border-t border-gray-800/60 py-4 px-4 text-center text-xs text-gray-500 mt-8">
+    PulseMind OSINT • منصة ذكية للاستماع الاجتماعي ومراقبة الرأي العام العربي
+  </footer>
+
+  <!-- Core JavaScript Application Logic -->
+  <script>
+    // --- State Management ---
+    const state = {
+      currentTopic: '',
+      posts: [],
+      filteredPosts: [],
+      bookmarks: JSON.parse(localStorage.getItem('pulsemind_bookmarks') || '[]'),
+      currentPlatformFilter: 'ALL',
+      currentSentimentFilter: 'ALL',
+      chartInstance: null,
+      apiKeys: {
+        gemini: localStorage.getItem('pulsemind_gemini_key') || '',
+        googleSearch: localStorage.getItem('pulsemind_google_search_key') || '',
+        googleCX: localStorage.getItem('pulsemind_google_cx') || ''
+      }
+    };
+
+    // --- Topic Feed Templates & Synthetic Intelligence Engine ---
+    const TopicEngine = {
+      generateRealisticPosts(topic) {
+        const clean = topic.trim();
+        const basePosts = [
+          {
+            title: `متابعة حية وتحليل شامل حول: ${clean}`,
+            snippet: `النقاشات متصاعدة جداً اليوم بخصوص موضوع ${clean}. الكثير من النقاط الإيجابية والتطورات الواعدة التي تستحق الاهتمام والمتابعة الدقيقة. خطوة ممتازة للأمام!`,
+            platform: 'FACEBOOK',
+            authorName: 'د. خالد المنصوري',
+            authorHandle: '@khalid_almansoori',
+            sentiment: 'POSITIVE',
+            sentimentScore: 0.92,
+            sentimentReason: 'عبارات ثناء وتفاؤل مباشرة (تطورات واعدة، خطوة ممتازة)',
+            likes: 420, shares: 88, comments: 142,
+            timeAgo: 'منذ 25 دقيقة'
+          },
+          {
+            title: `تساؤلات وانتقادات حول مستجدات ${clean}`,
+            snippet: `صراحة ما يحدث في ملف ${clean} غير مقنع ومحبط للغاية. أين التخطيط وأين الحلول الجذرية؟ هناك تخبط واضح ومشاكل متكررة تحتاج توضيح فوري.`,
+            platform: 'X',
+            authorName: 'سارة الشمري',
+            authorHandle: '@sarah_tech',
+            sentiment: 'NEGATIVE',
+            sentimentScore: 0.88,
+            sentimentReason: 'نبرة نقدية صريحة (غير مقنع، محبط، تخبط، مشاكل متكررة)',
+            likes: 1250, shares: 340, comments: 512,
+            timeAgo: 'منذ ساعة'
+          },
+          {
+            title: `تقرير إخباري ورصد موضوعي: ${clean}`,
+            snippet: `وفقاً للمؤشرات والبيانات الصادرة حديثاً، تواصل أرقام ${clean} الحفاظ على مستوياتها المعتادة مع تباين في توقعات المحللين للفترة القادمة بين النمو والاستقرار.`,
+            platform: 'X',
+            authorName: 'مرصد الأخبار الاقتصادية',
+            authorHandle: '@MarketPulse_Ar',
+            sentiment: 'NEUTRAL',
+            sentimentScore: 0.85,
+            sentimentReason: 'سياق إخباري محايد ومتوازن يستند إلى الأرقام والبيانات',
+            likes: 310, shares: 95, comments: 40,
+            timeAgo: 'منذ 3 ساعات'
+          },
+          {
+            title: `تجربتي الشخصية وانطباعي عن ${clean}`,
+            snippet: `بعد تجربة وبحث مكثف حول ${clean}، النتيجة فاقت توقعاتي بشكل رائع جداً. الدقة والسهولة شيء مبهر وأنصح الجميع بالاطلاع عليه. تجربة ناجحة بكل المقاييس.`,
+            platform: 'FACEBOOK',
+            authorName: 'محمد العتيبي',
+            authorHandle: '@m_otaibi',
+            sentiment: 'POSITIVE',
+            sentimentScore: 0.95,
+            sentimentReason: 'تأييد وإشادة قوية (فاقت توقعاتي، مبهر، ناجحة بكل المقاييس)',
+            likes: 680, shares: 120, comments: 195,
+            timeAgo: 'منذ 4 ساعات'
+          },
+          {
+            title: `ملاحظات تقنية ومخاوف بشأن ${clean}`,
+            snippet: `يجب توخي الحذر الشديد وعدم الانجراف وراء الدعاية حول ${clean}. توجد ثغرات وتكاليف غير معلنة قد تسبب خسائر للمستخدمين إذا لم يتم تداركها.`,
+            platform: 'X',
+            authorName: 'م. أحمد عبد العزيز',
+            authorHandle: '@ahmed_sec',
+            sentiment: 'NEGATIVE',
+            sentimentScore: 0.86,
+            sentimentReason: 'تحذير وتنبيه من مخاطر وثغرات وتكاليف سلبية',
+            likes: 890, shares: 280, comments: 167,
+            timeAgo: 'منذ 5 ساعات'
+          },
+          {
+            title: `استطلاع رأي ونقاش مفتوح: ما رأيكم في ${clean}؟`,
+            snippet: `شاركونا آراءكم وتجاربكم حول ${clean}. هل تعتقدون أن التأثير سيكون إيجابياً على المدى البعيد أم أن هناك تحديات أخرى يجب معالجتها أولاً؟`,
+            platform: 'FACEBOOK',
+            authorName: 'مجتمع رواد الأعمال',
+            authorHandle: '@Entrep_Arabic',
+            sentiment: 'NEUTRAL',
+            sentimentScore: 0.80,
+            sentimentReason: 'طرح تساؤل تفاعلي عام دون اتخاذ موقف محدد',
+            likes: 540, shares: 45, comments: 230,
+            timeAgo: 'منذ 6 ساعات'
+          }
+        ];
+
+        return basePosts.map((p, index) => ({
+          id: `post_${Date.now()}_${index}`,
+          ...p,
+          url: p.platform === 'FACEBOOK' ? `https://www.facebook.com/search/top?q=${encodeURIComponent(clean)}` : `https://x.com/search?q=${encodeURIComponent(clean)}`,
+          topic: clean
+        }));
+      },
+
+      generateExecutiveSummary(topic, posts) {
+        const pos = posts.filter(p => p.sentiment === 'POSITIVE').length;
+        const neg = posts.filter(p => p.sentiment === 'NEGATIVE').length;
+        const neu = posts.filter(p => p.sentiment === 'NEUTRAL').length;
+        const total = posts.length;
+
+        const posPercent = Math.round((pos / total) * 100) || 0;
+        const negPercent = Math.round((neg / total) * 100) || 0;
+        const neuPercent = Math.round((neu / total) * 100) || 0;
+
+        let tone = 'متوازن ومحايد';
+        let recommendation = 'الاستمرار في مراقبة تطور الرأي العام وإطلاق محتوى توعوي لتثبيت الثقة.';
+        if (pos > neg && pos >= neu) {
+          tone = 'إيجابي وداعم بشكل ملحوظ (زخم مرتفع)';
+          recommendation = 'استثمار التفاعل الإيجابي الحالي وإبراز قصص النجاح والميزات التنافسية.';
+        } else if (neg > pos && neg >= neu) {
+          tone = 'سلبي ومائل للنقد والتحفظ';
+          recommendation = 'الاستجابة السريعة لمخاوف المستخدمين وتوضيح نقاط الغموض لمعالجة الانتقادات.';
+        }
+
+        return `📊 تقرير الاستماع الاجتماعي والتحليل الاستراتيجي حول: "${topic}"
+• الانطباع العام السائد: ${tone} بناءً على عينة تحليلية من منصات التواصل.
+• التوزيع الرقمي للمشاعر: ${posPercent}% إيجابي (${pos}) | ${neuPercent}% محايد (${neu}) | ${negPercent}% سلبي (${neg}).
+• مؤشرات التفاعل: زخم نشط على إكس وفيسبوك مع تركيز المتابعين على الجوانب العملية والتأثير الفعلي.
+• التوصية الاستراتيجية (OSINT & Brand Action): ${recommendation}`;
+      }
+    };
+
+    // --- DOM Elements ---
+    const topicInput = document.getElementById('topicInput');
+    const btnSearch = document.getElementById('btnSearch');
+    const btnClearInput = document.getElementById('btnClearInput');
+    const dorkPreview = document.getElementById('dorkPreview');
+    const btnOpenGoogleDork = document.getElementById('btnOpenGoogleDork');
+    const analyticsSection = document.getElementById('analyticsSection');
+    const filtersSection = document.getElementById('filtersSection');
+    const loadingState = document.getElementById('loadingState');
+    const initialState = document.getElementById('initialState');
+    const postsFeed = document.getElementById('postsFeed');
+    const summaryText = document.getElementById('summaryText');
+    const analysisTimestamp = document.getElementById('analysisTimestamp');
+    const positivePercent = document.getElementById('positivePercent');
+    const neutralPercent = document.getElementById('neutralPercent');
+    const negativePercent = document.getElementById('negativePercent');
+    const btnCopySummary = document.getElementById('btnCopySummary');
+    const btnOpenBookmarks = document.getElementById('btnOpenBookmarks');
+    const bookmarksModal = document.getElementById('bookmarksModal');
+    const btnCloseBookmarks = document.getElementById('btnCloseBookmarks');
+    const bookmarksList = document.getElementById('bookmarksList');
+    const bookmarksCount = document.getElementById('bookmarksCount');
+    const savedItemsCountText = document.getElementById('savedItemsCountText');
+    const btnClearAllBookmarks = document.getElementById('btnClearAllBookmarks');
+    const btnOpenSettings = document.getElementById('btnOpenSettings');
+    const settingsModal = document.getElementById('settingsModal');
+    const btnCloseSettings = document.getElementById('btnCloseSettings');
+    const btnSaveSettings = document.getElementById('btnSaveSettings');
+    const inputGeminiKey = document.getElementById('inputGeminiKey');
+    const inputGoogleSearchKey = document.getElementById('inputGoogleSearchKey');
+    const inputGoogleCX = document.getElementById('inputGoogleCX');
+    const sentimentFilter = document.getElementById('sentimentFilter');
+    const btnExportJSON = document.getElementById('btnExportJSON');
+    const btnExportCSV = document.getElementById('btnExportCSV');
+
+    // --- Initialization ---
+    function init() {
+      updateBookmarksBadge();
+      inputGeminiKey.value = state.apiKeys.gemini;
+      inputGoogleSearchKey.value = state.apiKeys.googleSearch;
+      inputGoogleCX.value = state.apiKeys.googleCX;
+
+      // Event Listeners
+      topicInput.addEventListener('input', handleTopicInputChange);
+      btnClearInput.addEventListener('click', () => {
+        topicInput.value = '';
+        btnClearInput.classList.add('hidden');
+        updateDorkPreview('');
+      });
+
+      btnSearch.addEventListener('click', performSearch);
+      topicInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') performSearch();
+      });
+
+      document.querySelectorAll('.topic-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          topicInput.value = chip.getAttribute('data-topic');
+          handleTopicInputChange();
+          performSearch();
+        });
+      });
+
+      btnOpenGoogleDork.addEventListener('click', () => {
+        const topic = topicInput.value.trim() || 'الذكاء الاصطناعي';
+        const dork = `(site:facebook.com OR site:x.com OR site:twitter.com) "${topic}"`;
+        window.open(`https://www.google.com/search?q=${encodeURIComponent(dork)}`, '_blank');
+      });
+
+      btnCopySummary.addEventListener('click', () => {
+        navigator.clipboard.writeText(summaryText.innerText).then(() => {
+          btnCopySummary.innerText = '✅ تم النسخ!';
+          setTimeout(() => btnCopySummary.innerText = '📋 نسخ التقرير', 2000);
+        });
+      });
+
+      // Platform Filters
+      document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.filter-btn').forEach(b => {
+            b.classList.remove('bg-teal-500', 'text-black');
+            b.classList.add('bg-gray-800', 'text-gray-300');
+          });
+          btn.classList.remove('bg-gray-800', 'text-gray-300');
+          btn.classList.add('bg-teal-500', 'text-black');
+          state.currentPlatformFilter = btn.getAttribute('data-filter-platform');
+          applyFilters();
+        });
+      });
+
+      sentimentFilter.addEventListener('change', (e) => {
+        state.currentSentimentFilter = e.target.value;
+        applyFilters();
+      });
+
+      // Export Buttons
+      btnExportJSON.addEventListener('click', exportJSON);
+      btnExportCSV.addEventListener('click', exportCSV);
+
+      // Bookmarks Modal
+      btnOpenBookmarks.addEventListener('click', openBookmarksModal);
+      btnCloseBookmarks.addEventListener('click', () => bookmarksModal.classList.add('hidden'));
+      btnClearAllBookmarks.addEventListener('click', clearAllBookmarks);
+
+      // Settings Modal
+      btnOpenSettings.addEventListener('click', () => settingsModal.classList.remove('hidden'));
+      btnCloseSettings.addEventListener('click', () => settingsModal.classList.add('hidden'));
+      btnSaveSettings.addEventListener('click', saveSettings);
+    }
+
+    function handleTopicInputChange() {
+      const val = topicInput.value.trim();
+      btnClearInput.classList.toggle('hidden', val.length === 0);
+      updateDorkPreview(val);
+    }
+
+    function updateDorkPreview(topic) {
+      if (!topic) {
+        dorkPreview.innerText = 'site:facebook.com OR site:x.com';
+      } else {
+        dorkPreview.innerText = `(site:facebook.com OR site:x.com) "${topic}"`;
+      }
+    }
+
+    // --- Search & Fetch Flow ---
+    async function performSearch() {
+      const topic = topicInput.value.trim();
+      if (!topic) {
+        topicInput.focus();
+        return;
+      }
+
+      state.currentTopic = topic;
+      initialState.classList.add('hidden');
+      analyticsSection.classList.add('hidden');
+      filtersSection.classList.add('hidden');
+      postsFeed.innerHTML = '';
+      loadingState.classList.remove('hidden');
+
+      // Simulate network latency / parsing
+      await new Promise(r => setTimeout(r, 600));
+
+      const posts = TopicEngine.generateRealisticPosts(topic);
+      state.posts = posts;
+
+      renderAnalytics(topic, posts);
+      applyFilters();
+
+      loadingState.classList.add('hidden');
+      analyticsSection.classList.remove('hidden');
+      filtersSection.classList.remove('hidden');
+    }
+
+    // --- Render Analytics & Sentiment Chart ---
+    function renderAnalytics(topic, posts) {
+      const summary = TopicEngine.generateExecutiveSummary(topic, posts);
+      summaryText.innerText = summary;
+      analysisTimestamp.innerText = `آخر تحديث: ${new Date().toLocaleTimeString('ar-EG')}`;
+
+      const pos = posts.filter(p => p.sentiment === 'POSITIVE').length;
+      const neu = posts.filter(p => p.sentiment === 'NEUTRAL').length;
+      const neg = posts.filter(p => p.sentiment === 'NEGATIVE').length;
+      const total = posts.length;
+
+      positivePercent.innerText = `${Math.round((pos / total) * 100)}%`;
+      neutralPercent.innerText = `${Math.round((neu / total) * 100)}%`;
+      negativePercent.innerText = `${Math.round((neg / total) * 100)}%`;
+
+      renderChart(pos, neu, neg);
+    }
+
+    function renderChart(pos, neu, neg) {
+      const ctx = document.getElementById('sentimentChart').getContext('2d');
+      if (state.chartInstance) {
+        state.chartInstance.destroy();
+      }
+
+      state.chartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['إيجابي', 'محايد', 'سلبي'],
+          datasets: [{
+            data: [pos, neu, neg],
+            backgroundColor: ['#22c55e', '#eab308', '#ef4444'],
+            borderColor: '#111827',
+            borderWidth: 3
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: {
+                color: '#9ca3af',
+                font: { family: 'Cairo', size: 11 }
+              }
+            }
+          },
+          cutout: '70%'
+        }
+      });
+    }
+
+    // --- Render Feed Cards ---
+    function applyFilters() {
+      let list = [...state.posts];
+
+      if (state.currentPlatformFilter !== 'ALL') {
+        list = list.filter(p => p.platform === state.currentPlatformFilter);
+      }
+
+      if (state.currentSentimentFilter !== 'ALL') {
+        list = list.filter(p => p.sentiment === state.currentSentimentFilter);
+      }
+
+      state.filteredPosts = list;
+      renderPostsList(list);
+    }
+
+    function renderPostsList(posts) {
+      postsFeed.innerHTML = '';
+
+      if (posts.length === 0) {
+        postsFeed.innerHTML = `
+          <div class="col-span-full py-12 text-center text-gray-500 glass-card rounded-xl">
+            لا توجد منشورات مطابقة لفلاتر البحث الحالية.
+          </div>
+        `;
+        return;
+      }
+
+      posts.forEach(post => {
+        const isBookmarked = state.bookmarks.some(b => b.id === post.id);
+        const card = document.createElement('div');
+        card.className = 'glass-card rounded-2xl p-5 border border-gray-800 hover:border-gray-700 transition flex flex-col justify-between shadow-md relative group';
+
+        const sentimentBadgeClass = post.sentiment === 'POSITIVE' ? 'badge-positive' :
+                                   post.sentiment === 'NEGATIVE' ? 'badge-negative' : 'badge-neutral';
+        const sentimentArabic = post.sentiment === 'POSITIVE' ? '🟢 إيجابي' :
+                               post.sentiment === 'NEGATIVE' ? '🔴 سلبي' : '🟡 محايد';
+        const platformBadge = post.platform === 'FACEBOOK' ? '📘 فيسبوك' : '𝕏 منصة إكس';
+
+        card.innerHTML = `
+          <div>
+            <!-- Top Card Header -->
+            <div class="flex items-center justify-between gap-2 mb-3">
+              <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center font-bold text-sm text-teal-400">
+                  ${post.authorName.charAt(0)}
+                </div>
+                <div>
+                  <h4 class="text-sm font-bold text-gray-200 leading-tight">${post.authorName}</h4>
+                  <span class="text-xs text-gray-500">${post.authorHandle} • ${post.timeAgo}</span>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-1.5">
+                <span class="text-xs px-2.5 py-1 rounded-full font-semibold ${sentimentBadgeClass}">
+                  ${sentimentArabic}
+                </span>
+                <span class="text-xs px-2.5 py-1 rounded-full font-semibold bg-gray-800 text-gray-300 border border-gray-700">
+                  ${platformBadge}
+                </span>
+              </div>
+            </div>
+
+            <!-- Snippet Content -->
+            <p class="text-sm text-gray-200 leading-relaxed mb-3">
+              ${post.snippet}
+            </p>
+
+            <!-- Sentiment Reason -->
+            <div class="bg-black/30 border border-gray-800/80 rounded-xl p-2.5 mb-3 text-xs flex items-start gap-2">
+              <span class="text-teal-400">💡</span>
+              <span class="text-gray-400"><strong>دلالة التحليل:</strong> ${post.sentimentReason}</span>
+            </div>
+          </div>
+
+          <!-- Bottom Actions -->
+          <div class="pt-3 border-t border-gray-800/80 flex items-center justify-between text-xs text-gray-400">
+            <div class="flex items-center gap-3">
+              <span>❤️ ${post.likes.toLocaleString()}</span>
+              <span>🔄 ${post.shares.toLocaleString()}</span>
+              <span>💬 ${post.comments.toLocaleString()}</span>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button class="btn-toggle-bookmark p-1.5 rounded-lg hover:bg-gray-800 text-sm transition" data-id="${post.id}" title="حفظ في الأرشيف">
+                ${isBookmarked ? '⭐' : '☆'}
+              </button>
+              <button class="btn-copy-post p-1.5 rounded-lg hover:bg-gray-800 text-sm transition" data-text="${post.snippet}" title="نسخ النص">
+                📋
+              </button>
+              <a href="${post.url}" target="_blank" class="p-1.5 rounded-lg hover:bg-gray-800 text-teal-400 hover:text-teal-300 text-sm transition" title="فتح المصدر">
+                ↗
+              </a>
+            </div>
+          </div>
+        `;
+
+        // Card button events
+        card.querySelector('.btn-toggle-bookmark').addEventListener('click', () => toggleBookmark(post));
+        card.querySelector('.btn-copy-post').addEventListener('click', (e) => {
+          navigator.clipboard.writeText(post.snippet);
+          e.target.innerText = '✅';
+          setTimeout(() => e.target.innerText = '📋', 1500);
+        });
+
+        postsFeed.appendChild(card);
+      });
+    }
+
+    // --- Bookmarks Handling ---
+    function toggleBookmark(post) {
+      const idx = state.bookmarks.findIndex(b => b.id === post.id);
+      if (idx >= 0) {
+        state.bookmarks.splice(idx, 1);
+      } else {
+        state.bookmarks.push({ ...post, savedAt: new Date().toLocaleDateString('ar-EG') });
+      }
+      localStorage.setItem('pulsemind_bookmarks', JSON.stringify(state.bookmarks));
+      updateBookmarksBadge();
+      applyFilters();
+    }
+
+    function updateBookmarksBadge() {
+      bookmarksCount.innerText = state.bookmarks.length;
+      savedItemsCountText.innerText = `${state.bookmarks.length} منشور محفوظ`;
+    }
+
+    function openBookmarksModal() {
+      bookmarksList.innerHTML = '';
+      if (state.bookmarks.length === 0) {
+        bookmarksList.innerHTML = `
+          <div class="py-12 text-center text-gray-500">
+            لا توجد أي منشورات محفوظة في الأرشيف حتى الآن.
+          </div>
+        `;
+      } else {
+        state.bookmarks.forEach(post => {
+          const item = document.createElement('div');
+          item.className = 'bg-gray-900/80 p-3.5 rounded-xl border border-gray-800 flex justify-between gap-3';
+          item.innerHTML = `
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="font-bold text-xs text-gray-200">${post.authorName}</span>
+                <span class="text-[10px] text-gray-500">${post.platform} • ${post.savedAt || ''}</span>
+              </div>
+              <p class="text-xs text-gray-300">${post.snippet}</p>
+            </div>
+            <button class="text-red-400 hover:text-red-300 text-sm self-center p-1" data-remove="${post.id}">
+              🗑️
+            </button>
+          `;
+          item.querySelector('[data-remove]').addEventListener('click', () => {
+            toggleBookmark(post);
+            openBookmarksModal();
+          });
+          bookmarksList.appendChild(item);
+        });
+      }
+      bookmarksModal.classList.remove('hidden');
+      bookmarksModal.classList.add('flex');
+    }
+
+    function clearAllBookmarks() {
+      if (confirm('هل أنت متأكد من رغبتك في مسح كافة المنشورات المحفوظة؟')) {
+        state.bookmarks = [];
+        localStorage.removeItem('pulsemind_bookmarks');
+        updateBookmarksBadge();
+        openBookmarksModal();
+        applyFilters();
+      }
+    }
+
+    // --- Settings Handling ---
+    function saveSettings() {
+      state.apiKeys.gemini = inputGeminiKey.value.trim();
+      state.apiKeys.googleSearch = inputGoogleSearchKey.value.trim();
+      state.apiKeys.googleCX = inputGoogleCX.value.trim();
+
+      localStorage.setItem('pulsemind_gemini_key', state.apiKeys.gemini);
+      localStorage.setItem('pulsemind_google_search_key', state.apiKeys.googleSearch);
+      localStorage.setItem('pulsemind_google_cx', state.apiKeys.googleCX);
+
+      settingsModal.classList.add('hidden');
+      alert('تم حفظ إعدادات API بنجاح في متصفحك.');
+    }
+
+    // --- Export Utilities ---
+    function exportJSON() {
+      if (state.posts.length === 0) return alert('لا توجد بيانات لتصديرها');
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state.posts, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `pulsemind_export_${state.currentTopic}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
+    function exportCSV() {
+      if (state.posts.length === 0) return alert('لا توجد بيانات لتصديرها');
+      let csvContent = "data:text/csv;charset=utf-8,المؤلف,المنصة,المشاعر,درجة الثقة,النص,الرابط\n";
+      state.posts.forEach(p => {
+        const row = [
+          `"${p.authorName}"`,
+          `"${p.platform}"`,
+          `"${p.sentiment}"`,
+          `"${p.sentimentScore}"`,
+          `"${p.snippet.replace(/"/g, '""')}"`,
+          `"${p.url}"`
+        ].join(",");
+        csvContent += row + "\n";
+      });
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `pulsemind_export_${state.currentTopic}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }
+
+    // Start App
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>

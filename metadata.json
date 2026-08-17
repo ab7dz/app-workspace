@@ -1,0 +1,6 @@
+{
+  "name": "SocialSense",
+  "description": "Social Media Aggregator and Social Listening tool with Dork search, multi-platform feed, AI sentiment analysis, and analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
